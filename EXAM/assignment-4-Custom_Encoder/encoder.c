@@ -16,5 +16,6 @@ printf("Length: %d\n",sizeof(shellcode));
 for (int i=0;i<strlen(shellcode);i++){
 	printf("0x%02x,",shellcode[i]);
 }
+printf("\n");
 
 }
