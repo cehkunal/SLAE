@@ -1,0 +1,9 @@
+# Basic Principle of Creating Polymorphic Shellcode
+
+(a) Replace Instructions with Equivalent Functionality ones
+(b) Add Garbage instructions which don't change functionality in any way i.e NOP Equivalents
+
+#Important Polymorphic Engines
+(a) ADMutate : Also check defcon talk
+(b) CLET 
+(c) VX Heavens Mirror
